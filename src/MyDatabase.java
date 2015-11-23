@@ -1,14 +1,17 @@
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -34,24 +37,106 @@ public class MyDatabase {
 	final static byte controlled_study_mask  = 4;    // binary 0000 0100
 	final static byte govt_funded_mask       = 2;    // binary 0000 0010
 	final static byte fda_approved_mask      = 1;    // binary 0000 0001
-	
-	private HashMap<Integer, Long> id_map;
-	private HashMap<String, List<Long>> company_map;
-	private HashMap<String, List<Long>> drug_id_map;
-	private HashMap<Short, List<Long>> trials_map;
-	private HashMap<Short, List<Long>> patients_map;
-	private HashMap<Short, List<Long>> dosage_mg_map;
-	private HashMap<Float, List<Long>> reading_map;
-	private HashMap<Boolean, List<Long>> double_blind_map;
-	private HashMap<Boolean, List<Long>> controlled_study_map;
-	private HashMap<Boolean, List<Long>> govt_funded_map;
-	private HashMap<Boolean, List<Long>> fda_approved_map;
 
-	public <K,V> List<HashMap<K, V>> getIndexes() {
-		return null;
-		
+	private Map<Integer, List<Long>> id_map;
+	private Map<String, List<Long>> company_map;
+	private Map<String, List<Long>> drug_id_map;
+	private Map<Short, List<Long>> trials_map;
+	private Map<Short, List<Long>> patients_map;
+	private Map<Short, List<Long>> dosage_mg_map;
+	private Map<Float, List<Long>> reading_map;
+	private Map<Boolean, List<Long>> double_blind_map;
+	private Map<Boolean, List<Long>> controlled_study_map;
+	private Map<Boolean, List<Long>> govt_funded_map;
+	private Map<Boolean, List<Long>> fda_approved_map;
+
+	private <K> Map<K, List<Long>> getIndexFromFile(Class<K> cls, String idxFileName) {
+		FileInputStream fis;
+		ObjectInputStream ois = null;
+		File file;
+
+		Map<K, List<Long>> map = null;
+
+		file = new File(idxFileName);
+		try {
+			fis = new FileInputStream(file);
+			ois = new ObjectInputStream(fis);
+			map =  (TreeMap<K, List<Long>>) ois.readObject();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			try {
+				ois.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		return map;
 	}
-	
+
+	public void populateIndexes(String name) {
+		String idxFileName = null;
+
+		for(int i=0;i<FILE_HEADER_MAPPING.length;i++)
+		{
+			switch(FILE_HEADER_MAPPING[i])
+			{
+			case "id":
+				idxFileName = name+".id.ndx";
+				id_map = getIndexFromFile(Integer.class, idxFileName);
+				break;
+			case "company":
+				idxFileName = name+".company.ndx";
+				company_map = getIndexFromFile(String.class, idxFileName);
+				break;
+			case "drug_id":
+				idxFileName = name+".drug_id.ndx";
+				drug_id_map = getIndexFromFile(String.class, idxFileName);
+				break;
+			case "trials":
+				idxFileName = name+".trials.ndx";
+				trials_map = getIndexFromFile(Short.class, idxFileName);
+				break;
+			case "patients":
+				idxFileName = name+".patients.ndx";
+				patients_map = getIndexFromFile(Short.class, idxFileName);
+				break;
+			case "dosage_mg":
+				idxFileName = name+".dosage_mg.ndx";
+				dosage_mg_map = getIndexFromFile(Short.class, idxFileName);
+				break;
+			case "reading":
+				idxFileName = name+".reading.ndx";
+				reading_map = getIndexFromFile(Float.class, idxFileName);
+				break;
+			case "double_blind":
+				idxFileName = name+".double_blind.ndx";
+				double_blind_map = getIndexFromFile(Boolean.class, idxFileName);
+				break;
+			case "controlled_study":
+				idxFileName = name+".controlled_study.ndx";
+				controlled_study_map = getIndexFromFile(Boolean.class, idxFileName);
+				break;
+			case "govt_funded":
+				idxFileName = name+".govt_funded.ndx";
+				govt_funded_map = getIndexFromFile(Boolean.class, idxFileName);
+				break;
+			case "fda_approved":
+				idxFileName = name+".fda_approved.ndx";
+				fda_approved_map = getIndexFromFile(Boolean.class, idxFileName);
+			}
+		}
+	}
+
 	public boolean addRecord(Record record, String name)
 	{
 		byte commonByte = 0x00;
@@ -66,39 +151,50 @@ public class MyDatabase {
 			raf.seek(fileLength);
 
 			raf.writeInt(record.getId());
+			createIndex(id_map, record.getId(), fileLength);
 
 			raf.write(record.getCompany().length());
 			raf.writeBytes(record.getCompany());
+			createIndex(company_map, record.getCompany(), fileLength);
 
 			raf.writeBytes(record.getDrug_id());
+			createIndex(drug_id_map, record.getDrug_id(), fileLength);
 
 			raf.writeShort(record.getTrials());
+			createIndex(trials_map, record.getTrials(), fileLength);
 
 			raf.writeShort(record.getPatients());
+			createIndex(patients_map, record.getPatients(), fileLength);
 
 			raf.writeShort(record.getDosage_mg());
+			createIndex(dosage_mg_map, record.getDosage_mg(), fileLength);
 
 			raf.writeFloat(record.getReading());
+			createIndex(reading_map, record.getReading(), fileLength);
 
 			if(record.isDouble_blind())
 			{
 				commonByte = (byte)(commonByte | double_blind_mask);
 			}
+			createIndex(double_blind_map, record.isDouble_blind(), fileLength);
 
 			if(record.isControlled_study())
 			{
 				commonByte = (byte)(commonByte | controlled_study_mask);
 			}
+			createIndex(controlled_study_map, record.isControlled_study(), fileLength);
 
 			if(record.isGovt_funded())
 			{
 				commonByte = (byte)(commonByte | govt_funded_mask);
 			}
+			createIndex(govt_funded_map, record.isGovt_funded(), fileLength);
 
 			if(record.isFda_approved())
 			{
 				commonByte = (byte)(commonByte | fda_approved_mask);
 			}
+			createIndex(fda_approved_map, record.isFda_approved(), fileLength);
 
 			raf.write(commonByte);
 
@@ -119,9 +215,7 @@ public class MyDatabase {
 				return false;
 			}
 		}
-		
-		updateIndexes(name);
-		
+
 		return true;
 	}
 
@@ -129,21 +223,19 @@ public class MyDatabase {
 		Iterator<Record> it = records.iterator();
 		Record record;
 
-		byte commonByte = 0x00;
 		RandomAccessFile raf = null;
-		long fileLength = 0;
-		
-		id_map = new HashMap<Integer, Long>(); //since primary key only 1 value
-		company_map = new HashMap<String, List<Long>>(); //since not primary key List of values
-		drug_id_map = new HashMap<String, List<Long>>(); //since not primary key List of values
-		trials_map = new HashMap<Short, List<Long>>(); //since not primary key List of values
-		patients_map = new HashMap<Short, List<Long>>(); //since not primary key List of values
-		dosage_mg_map = new HashMap<Short, List<Long>>(); //since not primary key List of values
-		reading_map = new HashMap<Float, List<Long>>(); //since not primary key List of values
-		double_blind_map = new HashMap<Boolean, List<Long>>(); //since not primary key List of values
-		controlled_study_map = new HashMap<Boolean, List<Long>>(); //since not primary key List of values
-		govt_funded_map = new HashMap<Boolean, List<Long>>(); //since not primary key List of values
-		fda_approved_map = new HashMap<Boolean, List<Long>>(); //since not primary key List of values
+
+		id_map = new TreeMap<Integer, List<Long>>();
+		company_map = new TreeMap<String, List<Long>>();
+		drug_id_map = new TreeMap<String, List<Long>>();
+		trials_map = new TreeMap<Short, List<Long>>();
+		patients_map = new TreeMap<Short, List<Long>>();
+		dosage_mg_map = new TreeMap<Short, List<Long>>();
+		reading_map = new TreeMap<Float, List<Long>>();
+		double_blind_map = new TreeMap<Boolean, List<Long>>();
+		controlled_study_map = new TreeMap<Boolean, List<Long>>();
+		govt_funded_map = new TreeMap<Boolean, List<Long>>();
+		fda_approved_map = new TreeMap<Boolean, List<Long>>();
 
 		File f = new File(name+".db");
 
@@ -152,63 +244,9 @@ public class MyDatabase {
 
 			while(it.hasNext()) {
 				record = it.next();
-
-				fileLength = f.length(); //records starting location
-				raf.seek(fileLength);
-
-				raf.writeInt(record.getId());
-				id_map.put(record.getId(), fileLength);
-
-				raf.write(record.getCompany().length());
-				raf.writeBytes(record.getCompany());
-				createIndex(company_map, record.getCompany(), fileLength);
-
-				raf.writeBytes(record.getDrug_id());
-				createIndex(drug_id_map, record.getDrug_id(), fileLength);
-
-				raf.writeShort(record.getTrials());
-				createIndex(trials_map, record.getTrials(), fileLength);				
-
-				raf.writeShort(record.getPatients());
-				createIndex(patients_map, record.getPatients(), fileLength);
-
-				raf.writeShort(record.getDosage_mg());
-				createIndex(dosage_mg_map, record.getDosage_mg(), fileLength);
-
-				raf.writeFloat(record.getReading());
-				createIndex(reading_map, record.getReading(), fileLength);
-
-				if(record.isDouble_blind())
-				{
-					commonByte = (byte)(commonByte | double_blind_mask);
-				}
-				createIndex(double_blind_map, record.isDouble_blind(), fileLength);
-
-				if(record.isControlled_study())
-				{
-					commonByte = (byte)(commonByte | controlled_study_mask);
-				}
-				createIndex(controlled_study_map, record.isControlled_study(), fileLength);
-
-				if(record.isGovt_funded())
-				{
-					commonByte = (byte)(commonByte | govt_funded_mask);
-				}
-				createIndex(govt_funded_map, record.isGovt_funded(), fileLength);
-
-				if(record.isFda_approved())
-				{
-					commonByte = (byte)(commonByte | fda_approved_mask);
-				}
-				createIndex(fda_approved_map, record.isFda_approved(), fileLength);
-
-				raf.write(commonByte);
+				addRecord(record, name);
 			}
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return false;
-		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 			return false;
@@ -221,23 +259,21 @@ public class MyDatabase {
 				return false;
 			}
 		}
-		
-		updateIndexes(name);
-		
+
 		return true;
 	}
-	
-	public <K> void createIndex(HashMap<K, List<Long>> map, K value, long fileLength) {
+
+	public <K> void createIndex(Map<K, List<Long>> map, K value, long fileLength) {
 		List<Long> list;
 		if(!map.containsKey(value))
 		{
 			list = new ArrayList<Long>();
 			map.put(value, list);
 		}
-		
+
 		map.get(value).add(fileLength);
 	}
-	
+
 	public void updateIndexes(String name) {
 		updateIndex(id_map, name+".id");
 		updateIndex(company_map, name+".company");
@@ -251,8 +287,8 @@ public class MyDatabase {
 		updateIndex(govt_funded_map, name+".govt_funded");
 		updateIndex(fda_approved_map, name+".fda_approved");
 	}
-	
-	public <K,V> void updateIndex(HashMap<K, V> map, String name) {
+
+	public <K,V> void updateIndex(Map<K, V> map, String name) {
 		File idxFile = new File(name+".ndx");
 		FileOutputStream fos;
 		ObjectOutputStream oos = null;
@@ -369,6 +405,22 @@ public class MyDatabase {
 		MyDatabase myDb = new MyDatabase();
 
 		File file = new File("/Users/roshan/Documents/UTD/Fall 2015/Database/Programming Project 2/PHARMA_TRIALS_1000B.csv");
+
+		//bulk import
 		myDb.importCSV(file);
+
+		//updating indexes
+		String name = file.getName();
+		int pos = name.lastIndexOf(".");
+		if (pos > 0)
+		{
+			name = name.substring(0, pos);
+		}
+
+		myDb.updateIndexes(name);
+
+		//view record
+		//read index from file on load of db
+		myDb.populateIndexes(name);
 	}
 }
