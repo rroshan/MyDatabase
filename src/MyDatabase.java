@@ -12,15 +12,19 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
+import java.util.Vector;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.gibello.zql.ZExpression;
 
 
 public class MyDatabase {
 
-	private static final String [] FILE_HEADER_MAPPING = {"id","company","drug_id","trials","patients","dosage_mg","reading","double_blind","controlled_study","govt_funded","fda_approved"};
+	//Hardcoing. In actual implemenation will be read from metadata.
+	public static final String [] FILE_HEADER_MAPPING = {"id","company","drug_id","trials","patients","dosage_mg","reading","double_blind","controlled_study","govt_funded","fda_approved"};
+	public static final String [] DATA_TYPE_MAPPING = {"int","string","string","short","short","short","float","boolean","boolean","boolean","boolean"};
+
 	private static final String ID = "id";
 	private static final String COMPANY = "company";
 	private static final String DRUG_ID = "drug_id";
@@ -32,6 +36,8 @@ public class MyDatabase {
 	private static final String CONTROLLED_STUDY = "controlled_study";
 	private static final String GOVT_FUNDED = "govt_funded";
 	private static final String FDA_APPROVED = "fda_approved";
+
+
 
 	final static byte double_blind_mask      = 8;    // binary 0000 1000
 	final static byte controlled_study_mask  = 4;    // binary 0000 0100
@@ -49,6 +55,219 @@ public class MyDatabase {
 	private Map<Boolean, List<Long>> controlled_study_map;
 	private Map<Boolean, List<Long>> govt_funded_map;
 	private Map<Boolean, List<Long>> fda_approved_map;
+
+	public MyDatabase(String name) {
+		//fetch all the indexes into memory for faster query processing.
+		populateIndexes(name);
+	}
+
+	public <K extends Comparable<K>> ArrayList<Record> getRecords(Map<K, List<Long>> map, K indexValue, String tableName, String operator) {
+		List<Long> value = null;
+		Iterator<Long> it;
+		long fileLocation;
+		ArrayList<Record> resultSet = new ArrayList<Record>();
+		for(Map.Entry<K,List<Long>> entry : map.entrySet()) {
+			K key = entry.getKey();
+
+			if(operator.equalsIgnoreCase("<")) {
+				if(key.compareTo(indexValue) < 0) {
+					value = entry.getValue();  
+				}
+			} else if(operator.equalsIgnoreCase(">")) {
+				if(key.compareTo(indexValue) > 0) {
+					value = entry.getValue();  
+				}
+			} else if(operator.equalsIgnoreCase("=")) {
+				if(key.compareTo(indexValue) == 0) {
+					value = entry.getValue();  
+				}
+			} else if(operator.equalsIgnoreCase("<=")) {
+				if(key.compareTo(indexValue) < 0) {
+					value = entry.getValue();  
+				} else if(key.compareTo(indexValue) == 0) {
+					value = entry.getValue();  
+				}
+			} else if(operator.equalsIgnoreCase(">=")) {
+				if(key.compareTo(indexValue) > 0) {
+					value = entry.getValue();  
+				} else if(key.compareTo(indexValue) == 0) {
+					value = entry.getValue();  
+				}
+			}
+
+			if(value != null) {
+				it = value.iterator();
+				while(it.hasNext()) {
+					fileLocation = it.next();
+					resultSet.add(fetchRecordFromFile(fileLocation, tableName));
+				}
+			}
+			
+			value = null;
+		}
+		return resultSet;
+	}
+
+	public Record fetchRecordFromFile(long offset, String tableName) {
+		RandomAccessFile raf = null;
+		File file = new File(tableName+".db");
+		Record record = new Record();
+		byte[] b;
+
+		int dbm_position = 3;    // binary 0000 1000
+		int csm_position = 2;    // binary 0000 0100
+		int gfm_position = 1;    // binary 0000 0010
+		int fam_position = 0;    // binary 0000 0001
+
+		try {
+			raf = new RandomAccessFile(file, "r");
+			raf.seek(offset);
+
+			//read the record and add to a record object. Print the record object.
+			record.setId(raf.readInt());
+
+			int varcharLength = raf.readByte();
+			b = new byte[varcharLength];
+			raf.read(b);
+			String str = new String(b);
+			record.setCompany(str);
+
+			b = new byte[6];
+			raf.read(b);
+			str = new String(b);
+			record.setDrug_id(str);
+
+			record.setTrials(raf.readShort());
+
+			record.setPatients(raf.readShort());
+
+			record.setDosage_mg(raf.readShort());
+			
+			record.setReading(raf.readFloat());
+
+			byte byt = raf.readByte();
+			int op = (byt >> fam_position) & 1;
+			if(op == 1) {
+				record.setFda_approved(true);
+			}
+
+			op = (byt >> gfm_position) & 1;
+			if(op == 1) {
+				record.setGovt_funded(true);
+			}
+
+			op = (byt >> csm_position) & 1;
+			if(op == 1) {
+				record.setControlled_study(true);
+			}
+
+			op = (byt >> dbm_position) & 1;
+			if(op == 1) {
+				record.setDouble_blind(true);
+			}
+
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			try {
+				raf.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		return record;
+	}
+
+	public void printResult(Vector columns, ArrayList<Record> result) {
+		//mysql type output implementation
+		Iterator<Record> it = result.iterator();
+		while(it.hasNext()) {
+			System.out.println(it.next());
+		}
+
+	}
+
+	//select query
+	public ArrayList<Record> queryRecords(Vector columns, Vector from, String operator, Vector operands, boolean negation) {
+
+		String tableName = from.elementAt(0).toString().toUpperCase();
+
+		String leftOperand = operands.elementAt(0).toString().toLowerCase();
+
+		ArrayList<Record> result = new ArrayList<Record>();
+
+		int int_ty;
+		String string_ty;
+		short short_ty;
+		float float_ty;
+		boolean boolean_ty;
+		List<Long> offset = null;
+
+		switch(leftOperand) {
+		case "id":
+			int_ty = Integer.parseInt(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = id_map.get(int_ty);
+			result = getRecords(id_map, int_ty, tableName, operator);
+			break;
+		case "company":
+			string_ty = QueryProcessor.trimQuotes(operands.elementAt(1).toString());
+			offset = company_map.get(string_ty);
+			result = getRecords(company_map, string_ty, tableName, operator);
+			break;
+		case "drug_id":
+			string_ty = QueryProcessor.trimQuotes(operands.elementAt(1).toString());
+			offset = drug_id_map.get(string_ty);
+			result = getRecords(drug_id_map, string_ty, tableName, operator);
+			break;
+		case "trials":
+			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = trials_map.get(short_ty);
+			result = getRecords(trials_map, short_ty, tableName, operator);
+			break;
+		case "patients":
+			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = patients_map.get(short_ty);
+			result = getRecords(patients_map, short_ty, tableName, operator);
+			break;
+		case "dosage_mg":
+			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = dosage_mg_map.get(short_ty);
+			result = getRecords(dosage_mg_map, short_ty, tableName, operator);
+			break;
+		case "reading":
+			float_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = reading_map.get(float_ty);
+			result = getRecords(reading_map, float_ty, tableName, operator);
+			break;
+		case "double_blind":
+			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = double_blind_map.get(boolean_ty);
+			result = getRecords(double_blind_map, boolean_ty, tableName, operator);
+			break;
+		case "controlled_study":
+			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = controlled_study_map.get(boolean_ty);
+			result = getRecords(controlled_study_map, boolean_ty, tableName, operator);
+			break;
+		case "govt_funded":
+			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = govt_funded_map.get(boolean_ty);
+			result = getRecords(govt_funded_map, boolean_ty, tableName, operator);
+			break;
+		case "fda_approved":
+			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
+			offset = fda_approved_map.get(boolean_ty);
+			result = getRecords(fda_approved_map, boolean_ty, tableName, operator);
+		}
+
+		return result;
+	}
 
 	private <K> Map<K, List<Long>> getIndexFromFile(Class<K> cls, String idxFileName) {
 		FileInputStream fis;
@@ -135,6 +354,10 @@ public class MyDatabase {
 				fda_approved_map = getIndexFromFile(Boolean.class, idxFileName);
 			}
 		}
+	}
+
+	public void deleteRecord(long recordOffset) {
+
 	}
 
 	public boolean addRecord(Record record, String name)
@@ -342,6 +565,7 @@ public class MyDatabase {
 				Record dbRecord = new Record();
 
 				CSVRecord record = csvRecords.get(i);
+
 				int_ty = Integer.parseInt(record.get(ID));
 				dbRecord.setId(int_ty);
 
@@ -399,28 +623,5 @@ public class MyDatabase {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}
-
-	public static void main(String[] args) {
-		MyDatabase myDb = new MyDatabase();
-
-		File file = new File("/Users/roshan/Documents/UTD/Fall 2015/Database/Programming Project 2/PHARMA_TRIALS_1000B.csv");
-
-		//bulk import
-		myDb.importCSV(file);
-
-		//updating indexes
-		String name = file.getName();
-		int pos = name.lastIndexOf(".");
-		if (pos > 0)
-		{
-			name = name.substring(0, pos);
-		}
-
-		myDb.updateIndexes(name);
-
-		//view record
-		//read index from file on load of db
-		myDb.populateIndexes(name);
 	}
 }
