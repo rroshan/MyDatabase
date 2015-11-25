@@ -26,7 +26,7 @@ public class Client {
 		String sqlStmt = "SELECT * FROM PHARMA_TRIALS_1000B WHERE id = 1002;";
 		//String sqlStmt = "insert into PHARMA_TRIALS_1000B values (1002, 'roshan1', 'LP-114', 18, 2031, 480, 98.3, true, false, true, false);";
 		
-		//String sqlStmt = "DELETE FROM PHARMA_TRIALS_1000B WHERE id = 1001;";
+		//String sqlStmt = "DELETE FROM PHARMA_TRIALS_1000B WHERE id = 1002;";
 		qp.processQuery(sqlStmt);
 	}
 }

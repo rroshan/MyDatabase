@@ -195,90 +195,93 @@ public class MyDatabase {
 	public void printResult(Vector columns, List<Record> result) {
 		//mysql type output implementation
 		//header formation
-		Vector<String> strColumn = new Vector<String>();
+		if(result.size() > 0) {
+			Vector<String> strColumn = new Vector<String>();
 
-		if(columns.elementAt(0).toString().equalsIgnoreCase("*")) {
-			for(int i=0;i<FILE_HEADER_MAPPING.length;i++) {
-				strColumn.add(FILE_HEADER_MAPPING[i]);
-			}
-		} else {
-			Iterator<ZSelectItem> headerIterator = columns.iterator();
-			while(headerIterator.hasNext()) {
-				strColumn.add(headerIterator.next().toString());
-			}
-		}
-
-		String[] header = new String[strColumn.size()];
-		int count = 0;
-		
-		Record record;
-		Iterator<String> headerIterator = strColumn.iterator();
-		while(headerIterator.hasNext()) {
-			header[count++] = headerIterator.next();
-		}
-
-		count = 0;
-		int rowCount = 0;
-		String[][] data = new String[result.size()][strColumn.size()];
-		Iterator<Record> dataIterator = result.iterator();
-		String title;
-		while(dataIterator.hasNext()) {
-			record = dataIterator.next();
-			count = 0;
-			headerIterator = strColumn.iterator();
-			while(headerIterator.hasNext()) {
-				title = headerIterator.next();
-
-				switch(title) {
-				case "id":
-					data[rowCount][count] = Integer.toString(record.getId());
-					break;
-
-				case "company":
-					data[rowCount][count] = record.getCompany();
-					break;
-
-				case "drug_id":
-					data[rowCount][count] = record.getDrug_id();
-					break;
-
-				case "trials":
-					data[rowCount][count] = Short.toString(record.getTrials());
-					break;
-
-				case "patients":
-					data[rowCount][count] = Short.toString(record.getPatients());
-					break;
-
-				case "dosage_mg":
-					data[rowCount][count] = Short.toString(record.getDosage_mg());
-					break;
-
-				case "reading":
-					data[rowCount][count] = Float.toString(record.getReading());
-					break;
-
-				case "double_blind":
-					data[rowCount][count] = Boolean.toString(record.isDouble_blind());
-					break;
-
-				case "controlled_study":
-					data[rowCount][count] = Boolean.toString(record.isControlled_study());
-					break;
-
-				case "govt_funded":
-					data[rowCount][count] = Boolean.toString(record.isGovt_funded());
-					break;
-
-				case "fda_approved":
-					data[rowCount][count] = Boolean.toString(record.isFda_approved());
+			if(columns.elementAt(0).toString().equalsIgnoreCase("*")) {
+				for(int i=0;i<FILE_HEADER_MAPPING.length;i++) {
+					strColumn.add(FILE_HEADER_MAPPING[i]);
 				}
-				count++;
+			} else {
+				Iterator<ZSelectItem> headerIterator = columns.iterator();
+				while(headerIterator.hasNext()) {
+					strColumn.add(headerIterator.next().toString());
+				}
 			}
-			rowCount++;
+
+			String[] header = new String[strColumn.size()];
+			int count = 0;
+
+			Record record;
+			Iterator<String> headerIterator = strColumn.iterator();
+			while(headerIterator.hasNext()) {
+				header[count++] = headerIterator.next();
+			}
+
+			count = 0;
+			int rowCount = 0;
+			String[][] data = new String[result.size()][strColumn.size()];
+			Iterator<Record> dataIterator = result.iterator();
+			String title;
+			while(dataIterator.hasNext()) {
+				record = dataIterator.next();
+				count = 0;
+				headerIterator = strColumn.iterator();
+				while(headerIterator.hasNext()) {
+					title = headerIterator.next();
+
+					switch(title) {
+					case "id":
+						data[rowCount][count] = Integer.toString(record.getId());
+						break;
+
+					case "company":
+						data[rowCount][count] = record.getCompany();
+						break;
+
+					case "drug_id":
+						data[rowCount][count] = record.getDrug_id();
+						break;
+
+					case "trials":
+						data[rowCount][count] = Short.toString(record.getTrials());
+						break;
+
+					case "patients":
+						data[rowCount][count] = Short.toString(record.getPatients());
+						break;
+
+					case "dosage_mg":
+						data[rowCount][count] = Short.toString(record.getDosage_mg());
+						break;
+
+					case "reading":
+						data[rowCount][count] = Float.toString(record.getReading());
+						break;
+
+					case "double_blind":
+						data[rowCount][count] = Boolean.toString(record.isDouble_blind());
+						break;
+
+					case "controlled_study":
+						data[rowCount][count] = Boolean.toString(record.isControlled_study());
+						break;
+
+					case "govt_funded":
+						data[rowCount][count] = Boolean.toString(record.isGovt_funded());
+						break;
+
+					case "fda_approved":
+						data[rowCount][count] = Boolean.toString(record.isFda_approved());
+					}
+					count++;
+				}
+				rowCount++;
+			}
+
+			ASCIITable.getInstance().printTable(header, data);	
 		}
 
-		ASCIITable.getInstance().printTable(header, data);
 		System.out.println(result.size()+" in set");
 
 	}
@@ -383,7 +386,7 @@ public class MyDatabase {
 			fileLocation = it.next();
 			record = fetchRecordFromFile(fileLocation, tableName);
 			if(record != null) {
-				result.add(fetchRecordFromFile(fileLocation, tableName));
+				result.add(record);
 			}
 		}
 
