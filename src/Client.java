@@ -10,7 +10,7 @@ public class Client {
 			name = name.substring(0, pos);
 		}
 		
-		MyDatabase myDb = new MyDatabase(name);
+		MyDatabase myDb = new MyDatabase();
 		QueryProcessor qp = new QueryProcessor(myDb);
 
 		//bulk import
@@ -23,7 +23,10 @@ public class Client {
 		//read index from file on load of db
 		myDb.populateIndexes(name);
 		
-		String sqlStmt = "SELECT * FROM PHARMA_TRIALS_1000B WHERE drug_id = 'IW-308';";
+		String sqlStmt = "SELECT * FROM PHARMA_TRIALS_1000B WHERE id = 1002;";
+		//String sqlStmt = "insert into PHARMA_TRIALS_1000B values (1002, 'roshan1', 'LP-114', 18, 2031, 480, 98.3, true, false, true, false);";
+		
+		//String sqlStmt = "DELETE FROM PHARMA_TRIALS_1000B WHERE id = 1001;";
 		qp.processQuery(sqlStmt);
 	}
 }

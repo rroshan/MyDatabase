@@ -1,18 +1,17 @@
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
 
 import org.gibello.zql.ParseException;
-import org.gibello.zql.ZExp;
+import org.gibello.zql.ZDelete;
 import org.gibello.zql.ZExpression;
 import org.gibello.zql.ZInsert;
 import org.gibello.zql.ZQuery;
 import org.gibello.zql.ZStatement;
 import org.gibello.zql.ZqlParser;
-
-import sun.awt.geom.AreaOp.IntOp;
+import org.gibello.zql.ZSelectItem;
 
 
 public class QueryProcessor {
@@ -121,9 +120,28 @@ public class QueryProcessor {
 		return true;
 	}
 
+	public boolean validateSelect(Vector columns) {
+		Iterator<ZSelectItem> it = columns.iterator();
+		String column;
+		boolean flag = true;
+
+		if(!columns.elementAt(0).toString().equalsIgnoreCase("*")) {
+			while(it.hasNext()) {
+				column = it.next().toString();
+
+				if(!Arrays.asList(MyDatabase.FILE_HEADER_MAPPING).contains(column)) {
+					System.err.println("Invalid column name "+column+ " in the select query");
+					flag = false;
+				}
+			}
+		}
+		return flag;
+	}
+
 	public void processQuery(String stmt) {
 		p.initParser(new ByteArrayInputStream(stmt.getBytes()));
 		String name;
+		boolean negation = false;
 
 		try {
 			ZStatement st = p.readStatement();
@@ -150,10 +168,10 @@ public class QueryProcessor {
 				record.setTrials(Short.parseShort(str));
 
 				str = trimQuotes(values.elementAt(4).toString());
-				record.setTrials(Short.parseShort(str));
+				record.setPatients(Short.parseShort(str));
 
 				str = trimQuotes(values.elementAt(5).toString());
-				record.setPatients(Short.parseShort(str));
+				record.setDosage_mg(Short.parseShort(str));
 
 				str = trimQuotes(values.elementAt(6).toString());
 				record.setReading(Float.parseFloat(str));
@@ -177,7 +195,6 @@ public class QueryProcessor {
 			{
 				//select query
 				ZQuery query = (ZQuery)st;
-				boolean negation = false;
 
 				Vector columns = query.getSelect();
 				Vector from = query.getFrom();
@@ -194,10 +211,36 @@ public class QueryProcessor {
 				}
 
 				//validate the operator and operand combination
-				if(validateWhereClause(operator, operands))
+				if(validateWhereClause(operator, operands) && validateSelect(columns))
 				{
 					//myDb.queryRecords(columns, from, operator, operands, negation);
-					myDb.printResult(columns, myDb.queryRecords(columns, from, operator, operands, negation));
+					myDb.printResult(columns, myDb.queryRecords(from, operator, operands, negation));
+				}
+				else
+				{
+					System.err.println("Failed in query processing");
+				}
+			}
+			else if(st instanceof ZDelete)
+			{
+				ZDelete delete = (ZDelete)st;
+
+				String table = delete.getTable();
+				ZExpression where = (ZExpression) delete.getWhere();
+
+				String operator = where.getOperator();
+				Vector operands = where.getOperands();
+
+				if(operator.equalsIgnoreCase("NOT")) {
+					ZExpression exp =  (ZExpression) operands.elementAt(0);
+					operator = exp.getOperator();
+					operands = exp.getOperands();
+					negation = true;
+				}
+
+				if(validateWhereClause(operator, operands))
+				{
+					myDb.deleteRecord(table, operator, operands, negation);
 				}
 				else
 				{

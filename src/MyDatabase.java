@@ -16,7 +16,8 @@ import java.util.Vector;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.gibello.zql.ZExpression;
+import org.gibello.zql.ZSelectItem;
+import com.bethecoder.ascii_table.ASCIITable;
 
 
 public class MyDatabase {
@@ -56,16 +57,13 @@ public class MyDatabase {
 	private Map<Boolean, List<Long>> govt_funded_map;
 	private Map<Boolean, List<Long>> fda_approved_map;
 
-	public MyDatabase(String name) {
-		//fetch all the indexes into memory for faster query processing.
-		populateIndexes(name);
-	}
-
-	public <K extends Comparable<K>> ArrayList<Record> getRecords(Map<K, List<Long>> map, K indexValue, String tableName, String operator) {
+	private <K extends Comparable<K>> List<Long> getRecordLocations(Map<K, List<Long>> map, K indexValue, String tableName, String operator) {
 		List<Long> value = null;
 		Iterator<Long> it;
 		long fileLocation;
-		ArrayList<Record> resultSet = new ArrayList<Record>();
+
+		List<Long> recordLocations = new ArrayList<Long>();
+
 		for(Map.Entry<K,List<Long>> entry : map.entrySet()) {
 			K key = entry.getKey();
 
@@ -93,19 +91,24 @@ public class MyDatabase {
 				} else if(key.compareTo(indexValue) == 0) {
 					value = entry.getValue();  
 				}
+			} else if(operator.equalsIgnoreCase("!=")) {
+				if(key.compareTo(indexValue) != 0) {
+					value = entry.getValue(); 
+				}
 			}
 
 			if(value != null) {
 				it = value.iterator();
 				while(it.hasNext()) {
 					fileLocation = it.next();
-					resultSet.add(fetchRecordFromFile(fileLocation, tableName));
+					recordLocations.add(fileLocation);
 				}
 			}
-			
+
 			value = null;
 		}
-		return resultSet;
+
+		return recordLocations;
 	}
 
 	public Record fetchRecordFromFile(long offset, String tableName) {
@@ -142,28 +145,33 @@ public class MyDatabase {
 			record.setPatients(raf.readShort());
 
 			record.setDosage_mg(raf.readShort());
-			
+
 			record.setReading(raf.readFloat());
 
 			byte byt = raf.readByte();
-			int op = (byt >> fam_position) & 1;
-			if(op == 1) {
-				record.setFda_approved(true);
-			}
 
-			op = (byt >> gfm_position) & 1;
-			if(op == 1) {
-				record.setGovt_funded(true);
-			}
+			if(byt < 0) {
+				return null;
+			} else {
+				int op = (byt >> fam_position) & 1;
+				if(op == 1) {
+					record.setFda_approved(true);
+				}
 
-			op = (byt >> csm_position) & 1;
-			if(op == 1) {
-				record.setControlled_study(true);
-			}
+				op = (byt >> gfm_position) & 1;
+				if(op == 1) {
+					record.setGovt_funded(true);
+				}
 
-			op = (byt >> dbm_position) & 1;
-			if(op == 1) {
-				record.setDouble_blind(true);
+				op = (byt >> csm_position) & 1;
+				if(op == 1) {
+					record.setControlled_study(true);
+				}
+
+				op = (byt >> dbm_position) & 1;
+				if(op == 1) {
+					record.setDouble_blind(true);
+				}
 			}
 
 		} catch (FileNotFoundException e) {
@@ -184,23 +192,100 @@ public class MyDatabase {
 		return record;
 	}
 
-	public void printResult(Vector columns, ArrayList<Record> result) {
+	public void printResult(Vector columns, List<Record> result) {
 		//mysql type output implementation
-		Iterator<Record> it = result.iterator();
-		while(it.hasNext()) {
-			System.out.println(it.next());
+		//header formation
+		Vector<String> strColumn = new Vector<String>();
+
+		if(columns.elementAt(0).toString().equalsIgnoreCase("*")) {
+			for(int i=0;i<FILE_HEADER_MAPPING.length;i++) {
+				strColumn.add(FILE_HEADER_MAPPING[i]);
+			}
+		} else {
+			Iterator<ZSelectItem> headerIterator = columns.iterator();
+			while(headerIterator.hasNext()) {
+				strColumn.add(headerIterator.next().toString());
+			}
 		}
+
+		String[] header = new String[strColumn.size()];
+		int count = 0;
+		
+		Record record;
+		Iterator<String> headerIterator = strColumn.iterator();
+		while(headerIterator.hasNext()) {
+			header[count++] = headerIterator.next();
+		}
+
+		count = 0;
+		int rowCount = 0;
+		String[][] data = new String[result.size()][strColumn.size()];
+		Iterator<Record> dataIterator = result.iterator();
+		String title;
+		while(dataIterator.hasNext()) {
+			record = dataIterator.next();
+			count = 0;
+			headerIterator = strColumn.iterator();
+			while(headerIterator.hasNext()) {
+				title = headerIterator.next();
+
+				switch(title) {
+				case "id":
+					data[rowCount][count] = Integer.toString(record.getId());
+					break;
+
+				case "company":
+					data[rowCount][count] = record.getCompany();
+					break;
+
+				case "drug_id":
+					data[rowCount][count] = record.getDrug_id();
+					break;
+
+				case "trials":
+					data[rowCount][count] = Short.toString(record.getTrials());
+					break;
+
+				case "patients":
+					data[rowCount][count] = Short.toString(record.getPatients());
+					break;
+
+				case "dosage_mg":
+					data[rowCount][count] = Short.toString(record.getDosage_mg());
+					break;
+
+				case "reading":
+					data[rowCount][count] = Float.toString(record.getReading());
+					break;
+
+				case "double_blind":
+					data[rowCount][count] = Boolean.toString(record.isDouble_blind());
+					break;
+
+				case "controlled_study":
+					data[rowCount][count] = Boolean.toString(record.isControlled_study());
+					break;
+
+				case "govt_funded":
+					data[rowCount][count] = Boolean.toString(record.isGovt_funded());
+					break;
+
+				case "fda_approved":
+					data[rowCount][count] = Boolean.toString(record.isFda_approved());
+				}
+				count++;
+			}
+			rowCount++;
+		}
+
+		ASCIITable.getInstance().printTable(header, data);
+		System.out.println(result.size()+" in set");
 
 	}
 
-	//select query
-	public ArrayList<Record> queryRecords(Vector columns, Vector from, String operator, Vector operands, boolean negation) {
-
-		String tableName = from.elementAt(0).toString().toUpperCase();
+	public List<Long> getRecordLocations(String tableName, String operator, Vector operands, boolean negation) {
 
 		String leftOperand = operands.elementAt(0).toString().toLowerCase();
-
-		ArrayList<Record> result = new ArrayList<Record>();
 
 		int int_ty;
 		String string_ty;
@@ -209,64 +294,166 @@ public class MyDatabase {
 		boolean boolean_ty;
 		List<Long> offset = null;
 
+		if(negation) {
+			switch(operator) {
+			case "=":
+				operator = "!=";
+				break;
+
+			case ">":
+				operator = "<=";
+				break;
+
+			case "<":
+				operator = ">=";
+				break;
+
+			case "<=":
+				operator = ">";
+				break;
+
+			case ">=":
+				operator = "<";
+			}
+		}
+
+
 		switch(leftOperand) {
 		case "id":
 			int_ty = Integer.parseInt(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = id_map.get(int_ty);
-			result = getRecords(id_map, int_ty, tableName, operator);
+			offset = getRecordLocations(id_map, int_ty, tableName, operator);
 			break;
 		case "company":
 			string_ty = QueryProcessor.trimQuotes(operands.elementAt(1).toString());
-			offset = company_map.get(string_ty);
-			result = getRecords(company_map, string_ty, tableName, operator);
+			offset = getRecordLocations(company_map, string_ty, tableName, operator);
 			break;
 		case "drug_id":
 			string_ty = QueryProcessor.trimQuotes(operands.elementAt(1).toString());
-			offset = drug_id_map.get(string_ty);
-			result = getRecords(drug_id_map, string_ty, tableName, operator);
+			offset = getRecordLocations(drug_id_map, string_ty, tableName, operator);
 			break;
 		case "trials":
 			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = trials_map.get(short_ty);
-			result = getRecords(trials_map, short_ty, tableName, operator);
+			offset = getRecordLocations(trials_map, short_ty, tableName, operator);
 			break;
 		case "patients":
 			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = patients_map.get(short_ty);
-			result = getRecords(patients_map, short_ty, tableName, operator);
+			offset = getRecordLocations(patients_map, short_ty, tableName, operator);
 			break;
 		case "dosage_mg":
 			short_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = dosage_mg_map.get(short_ty);
-			result = getRecords(dosage_mg_map, short_ty, tableName, operator);
+			offset = getRecordLocations(dosage_mg_map, short_ty, tableName, operator);
 			break;
 		case "reading":
 			float_ty = Short.parseShort(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = reading_map.get(float_ty);
-			result = getRecords(reading_map, float_ty, tableName, operator);
+			offset = getRecordLocations(reading_map, float_ty, tableName, operator);
 			break;
 		case "double_blind":
 			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = double_blind_map.get(boolean_ty);
-			result = getRecords(double_blind_map, boolean_ty, tableName, operator);
+			offset = getRecordLocations(double_blind_map, boolean_ty, tableName, operator);
 			break;
 		case "controlled_study":
 			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = controlled_study_map.get(boolean_ty);
-			result = getRecords(controlled_study_map, boolean_ty, tableName, operator);
+			offset = getRecordLocations(controlled_study_map, boolean_ty, tableName, operator);
 			break;
 		case "govt_funded":
 			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = govt_funded_map.get(boolean_ty);
-			result = getRecords(govt_funded_map, boolean_ty, tableName, operator);
+			offset = getRecordLocations(govt_funded_map, boolean_ty, tableName, operator);
 			break;
 		case "fda_approved":
 			boolean_ty = Boolean.parseBoolean(QueryProcessor.trimQuotes(operands.elementAt(1).toString()));
-			offset = fda_approved_map.get(boolean_ty);
-			result = getRecords(fda_approved_map, boolean_ty, tableName, operator);
+			offset = getRecordLocations(fda_approved_map, boolean_ty, tableName, operator);
+		}
+
+		return offset;
+	}
+
+	//select query
+	public List<Record> queryRecords(Vector from, String operator, Vector operands, boolean negation) {
+
+		String tableName = from.elementAt(0).toString().toUpperCase();
+
+		List<Long> offset = getRecordLocations(tableName, operator, operands, negation);
+
+		long fileLocation;
+		Record record;
+		List<Record> result = new ArrayList<Record>() ;
+
+		Iterator<Long> it = offset.iterator();
+		while(it.hasNext()) {
+			fileLocation = it.next();
+			record = fetchRecordFromFile(fileLocation, tableName);
+			if(record != null) {
+				result.add(fetchRecordFromFile(fileLocation, tableName));
+			}
 		}
 
 		return result;
+	}
+
+	public void deleteRecord(String tableName, String operator, Vector operands, boolean negation) {
+		//check if index has to be deleted
+		List<Long> offset = getRecordLocations(tableName, operator, operands, negation);
+
+		RandomAccessFile raf = null;
+		File file = new File(tableName+".db");
+		byte[] b;
+		long fileLocation;
+		long recordOffset;
+
+		Iterator<Long> it = offset.iterator();
+		try {
+			raf = new RandomAccessFile(file, "rw");
+
+			while(it.hasNext())
+			{
+				recordOffset = it.next();
+				raf.seek(recordOffset);
+
+				raf.readInt();
+				int varcharLength = raf.readByte();
+				b = new byte[varcharLength];
+				raf.read(b);
+
+				b = new byte[6];
+				raf.read(b);
+
+				raf.readShort();
+
+				raf.readShort();
+
+				raf.readShort();
+
+				raf.readFloat();
+
+				fileLocation = raf.getFilePointer();
+
+				byte byt = raf.readByte();
+
+				raf.seek(fileLocation);
+
+				byte delByte = 0;
+				delByte = (byte) (delByte | (1 << 7));
+
+				byt = (byte) (byt | delByte);
+
+				raf.write(byt);
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} finally {
+			try {
+				raf.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		System.out.println(offset.size()+" records deleted");
 	}
 
 	private <K> Map<K, List<Long>> getIndexFromFile(Class<K> cls, String idxFileName) {
@@ -354,10 +541,6 @@ public class MyDatabase {
 				fda_approved_map = getIndexFromFile(Boolean.class, idxFileName);
 			}
 		}
-	}
-
-	public void deleteRecord(long recordOffset) {
-
 	}
 
 	public boolean addRecord(Record record, String name)

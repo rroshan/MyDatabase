@@ -4,5 +4,6 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="lib" path="/Users/roshan/Downloads/Software/commons-csv-1.2.jar"/>
 	<classpathentry kind="lib" path="/Users/roshan/Downloads/zql/classes"/>
+	<classpathentry kind="lib" path="/Users/roshan/Downloads/Software/btc-ascii-table-1.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
