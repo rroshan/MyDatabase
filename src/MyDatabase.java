@@ -25,6 +25,7 @@ public class MyDatabase {
 	//Hardcoing. In actual implemenation will be read from metadata.
 	public static final String [] FILE_HEADER_MAPPING = {"id","company","drug_id","trials","patients","dosage_mg","reading","double_blind","controlled_study","govt_funded","fda_approved"};
 	public static final String [] DATA_TYPE_MAPPING = {"int","string","string","short","short","short","float","boolean","boolean","boolean","boolean"};
+	public static final String primaryKey = "id";
 
 	private static final String ID = "id";
 	private static final String COMPANY = "company";
@@ -111,9 +112,9 @@ public class MyDatabase {
 		return recordLocations;
 	}
 
-	public Record fetchRecordFromFile(long offset, String tableName) {
+	public Record fetchRecordFromFile(long offset, String tableName, String dbLocation) {
 		RandomAccessFile raf = null;
-		File file = new File(tableName+".db");
+		File file = new File(dbLocation+"/"+tableName+".db");
 		Record record = new Record();
 		byte[] b;
 
@@ -371,7 +372,7 @@ public class MyDatabase {
 	}
 
 	//select query
-	public List<Record> queryRecords(Vector from, String operator, Vector operands, boolean negation) {
+	public List<Record> queryRecords(Vector from, String operator, Vector operands, boolean negation, String dbLocation) {
 
 		String tableName = from.elementAt(0).toString().toUpperCase();
 
@@ -384,7 +385,7 @@ public class MyDatabase {
 		Iterator<Long> it = offset.iterator();
 		while(it.hasNext()) {
 			fileLocation = it.next();
-			record = fetchRecordFromFile(fileLocation, tableName);
+			record = fetchRecordFromFile(fileLocation, tableName, dbLocation);
 			if(record != null) {
 				result.add(record);
 			}
@@ -393,12 +394,49 @@ public class MyDatabase {
 		return result;
 	}
 
-	public void deleteRecord(String tableName, String operator, Vector operands, boolean negation) {
-		//check if index has to be deleted
-		List<Long> offset = getRecordLocations(tableName, operator, operands, negation);
+	public void deleteIndexes(List<Long> offset) {
+		deleteFromIndex(id_map, offset);
+		deleteFromIndex(company_map, offset);
+		deleteFromIndex(drug_id_map, offset);
+		deleteFromIndex(trials_map, offset);
+		deleteFromIndex(patients_map, offset);
+		deleteFromIndex(dosage_mg_map, offset);
+		deleteFromIndex(reading_map, offset);
+		deleteFromIndex(double_blind_map, offset);
+		deleteFromIndex(controlled_study_map, offset);
+		deleteFromIndex(govt_funded_map, offset);
+		deleteFromIndex(fda_approved_map, offset);
+	}
 
+	public <K> void deleteFromIndex(Map<K, List<Long>> map, List<Long> offset) {
+		Long loc;
+		
+		List<K> keysToBeRemoved = new ArrayList<K>();
+		
+		Iterator<Long> it = offset.iterator();
+		while(it.hasNext()) {
+			loc = it.next();
+			List<Long> locs;
+			for(Map.Entry<K,List<Long>> entry : map.entrySet()) {
+				K key = entry.getKey();
+				locs = entry.getValue();
+				locs.remove(loc);
+				
+				if(locs.isEmpty()) {
+					keysToBeRemoved.add(key);
+				}
+			}
+		}
+		
+		Iterator<K> keyIterator = keysToBeRemoved.iterator();
+		while(keyIterator.hasNext()) {
+			map.remove(keyIterator.next());
+		}
+	}
+
+	private void performSoftDelete(List<Long> offset, String tableName, String dbLocation) {
 		RandomAccessFile raf = null;
-		File file = new File(tableName+".db");
+		File file = new File(dbLocation+"/"+tableName+".db");
 		byte[] b;
 		long fileLocation;
 		long recordOffset;
@@ -455,18 +493,40 @@ public class MyDatabase {
 				e.printStackTrace();
 			}
 		}
-
-		System.out.println(offset.size()+" records deleted");
+	}
+	
+	public void deleteRecord(String tableName, String operator, Vector operands, boolean negation, String dbLocation) {
+		//check if index has to be deleted
+		List<Long> offset = getRecordLocations(tableName, operator, operands, negation);
+		performSoftDelete(offset, tableName, dbLocation);
+		deleteIndexes(offset);
+		updateIndexes(tableName, dbLocation);
+		System.out.println(offset.size()+" row(s) deleted");
 	}
 
-	private <K> Map<K, List<Long>> getIndexFromFile(Class<K> cls, String idxFileName) {
+	public void deleteAllRecords(String from, String dbLocation) {
+		int count = 0;
+		List<Long> offset = new ArrayList<Long>();
+		for(Map.Entry<Integer,List<Long>> entry : id_map.entrySet()) {
+			performSoftDelete(entry.getValue(), from, dbLocation);
+			offset.add(entry.getValue().get(0));
+			count = count + entry.getValue().size();
+		}
+		
+		deleteIndexes(offset);
+		updateIndexes(from, dbLocation);
+		
+		System.out.println(count+" row(s) deleted");
+	}
+	
+	private <K> Map<K, List<Long>> getIndexFromFile(Class<K> cls, String idxFileName, String dbLocation) {
 		FileInputStream fis;
 		ObjectInputStream ois = null;
 		File file;
 
 		Map<K, List<Long>> map = null;
 
-		file = new File(idxFileName);
+		file = new File(dbLocation+"/"+idxFileName);
 		try {
 			fis = new FileInputStream(file);
 			ois = new ObjectInputStream(fis);
@@ -492,7 +552,7 @@ public class MyDatabase {
 		return map;
 	}
 
-	public void populateIndexes(String name) {
+	public void populateIndexes(String name, String dbLocation) {
 		String idxFileName = null;
 
 		for(int i=0;i<FILE_HEADER_MAPPING.length;i++)
@@ -501,57 +561,94 @@ public class MyDatabase {
 			{
 			case "id":
 				idxFileName = name+".id.ndx";
-				id_map = getIndexFromFile(Integer.class, idxFileName);
+				id_map = getIndexFromFile(Integer.class, idxFileName, dbLocation);
 				break;
 			case "company":
 				idxFileName = name+".company.ndx";
-				company_map = getIndexFromFile(String.class, idxFileName);
+				company_map = getIndexFromFile(String.class, idxFileName, dbLocation);
 				break;
 			case "drug_id":
 				idxFileName = name+".drug_id.ndx";
-				drug_id_map = getIndexFromFile(String.class, idxFileName);
+				drug_id_map = getIndexFromFile(String.class, idxFileName, dbLocation);
 				break;
 			case "trials":
 				idxFileName = name+".trials.ndx";
-				trials_map = getIndexFromFile(Short.class, idxFileName);
+				trials_map = getIndexFromFile(Short.class, idxFileName, dbLocation);
 				break;
 			case "patients":
 				idxFileName = name+".patients.ndx";
-				patients_map = getIndexFromFile(Short.class, idxFileName);
+				patients_map = getIndexFromFile(Short.class, idxFileName, dbLocation);
 				break;
 			case "dosage_mg":
 				idxFileName = name+".dosage_mg.ndx";
-				dosage_mg_map = getIndexFromFile(Short.class, idxFileName);
+				dosage_mg_map = getIndexFromFile(Short.class, idxFileName, dbLocation);
 				break;
 			case "reading":
 				idxFileName = name+".reading.ndx";
-				reading_map = getIndexFromFile(Float.class, idxFileName);
+				reading_map = getIndexFromFile(Float.class, idxFileName, dbLocation);
 				break;
 			case "double_blind":
 				idxFileName = name+".double_blind.ndx";
-				double_blind_map = getIndexFromFile(Boolean.class, idxFileName);
+				double_blind_map = getIndexFromFile(Boolean.class, idxFileName, dbLocation);
 				break;
 			case "controlled_study":
 				idxFileName = name+".controlled_study.ndx";
-				controlled_study_map = getIndexFromFile(Boolean.class, idxFileName);
+				controlled_study_map = getIndexFromFile(Boolean.class, idxFileName, dbLocation);
 				break;
 			case "govt_funded":
 				idxFileName = name+".govt_funded.ndx";
-				govt_funded_map = getIndexFromFile(Boolean.class, idxFileName);
+				govt_funded_map = getIndexFromFile(Boolean.class, idxFileName, dbLocation);
 				break;
 			case "fda_approved":
 				idxFileName = name+".fda_approved.ndx";
-				fda_approved_map = getIndexFromFile(Boolean.class, idxFileName);
+				fda_approved_map = getIndexFromFile(Boolean.class, idxFileName, dbLocation);
 			}
 		}
 	}
 
-	public boolean addRecord(Record record, String name)
+	public List<Record> queryAllRecords(Vector from, String dbLocation) {
+		List<Long> offset = new ArrayList<Long>();
+		
+		String tableName = from.elementAt(0).toString().toUpperCase();
+		
+		for(Map.Entry<Integer,List<Long>> entry : id_map.entrySet()) {
+			offset.add(entry.getValue().get(0));
+		}
+		
+		long fileLocation;
+		Record record;
+		List<Record> result = new ArrayList<Record>() ;
+
+		Iterator<Long> it = offset.iterator();
+		while(it.hasNext()) {
+			fileLocation = it.next();
+			record = fetchRecordFromFile(fileLocation, tableName, dbLocation);
+			if(record != null) {
+				result.add(record);
+			}
+		}
+
+		return result;
+	}
+	
+	public boolean validatePKConstraint(Record record) {
+
+		int id = record.getId();
+
+		if(id_map.containsKey(id)) {
+			return false;
+		}
+
+		return true;
+
+	}
+
+	public boolean addRecord(Record record, String name, String dbLocation)
 	{
 		byte commonByte = 0x00;
 		RandomAccessFile raf = null;
 
-		File f = new File(name+".db");
+		File f = new File(dbLocation+"/"+name+".db");
 
 		try {
 			raf = new RandomAccessFile(f, "rw");
@@ -628,11 +725,9 @@ public class MyDatabase {
 		return true;
 	}
 
-	public boolean addBulkRecords(ArrayList<Record> records, String name) {
+	public boolean addBulkRecords(ArrayList<Record> records, String name, String dbLocation) {
 		Iterator<Record> it = records.iterator();
 		Record record;
-
-		RandomAccessFile raf = null;
 
 		id_map = new TreeMap<Integer, List<Long>>();
 		company_map = new TreeMap<String, List<Long>>();
@@ -646,27 +741,9 @@ public class MyDatabase {
 		govt_funded_map = new TreeMap<Boolean, List<Long>>();
 		fda_approved_map = new TreeMap<Boolean, List<Long>>();
 
-		File f = new File(name+".db");
-
-		try {
-			raf = new RandomAccessFile(f, "rw");
-
-			while(it.hasNext()) {
-				record = it.next();
-				addRecord(record, name);
-			}
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			return false;
-		} finally {
-			try {
-				raf.close();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-				return false;
-			}
+		while(it.hasNext()) {
+			record = it.next();
+			addRecord(record, name, dbLocation);
 		}
 
 		return true;
@@ -683,18 +760,18 @@ public class MyDatabase {
 		map.get(value).add(fileLength);
 	}
 
-	public void updateIndexes(String name) {
-		updateIndex(id_map, name+".id");
-		updateIndex(company_map, name+".company");
-		updateIndex(drug_id_map, name+".drug_id");
-		updateIndex(trials_map, name+".trials");
-		updateIndex(patients_map, name+".patients");
-		updateIndex(dosage_mg_map, name+".dosage_mg");
-		updateIndex(reading_map, name+".reading");
-		updateIndex(double_blind_map, name+".double_blind");
-		updateIndex(controlled_study_map, name+".controlled_study");
-		updateIndex(govt_funded_map, name+".govt_funded");
-		updateIndex(fda_approved_map, name+".fda_approved");
+	public void updateIndexes(String name, String dbLocation) {
+		updateIndex(id_map, dbLocation+"/"+name+".id");
+		updateIndex(company_map, dbLocation+"/"+name+".company");
+		updateIndex(drug_id_map, dbLocation+"/"+name+".drug_id");
+		updateIndex(trials_map, dbLocation+"/"+name+".trials");
+		updateIndex(patients_map, dbLocation+"/"+name+".patients");
+		updateIndex(dosage_mg_map, dbLocation+"/"+name+".dosage_mg");
+		updateIndex(reading_map, dbLocation+"/"+name+".reading");
+		updateIndex(double_blind_map, dbLocation+"/"+name+".double_blind");
+		updateIndex(controlled_study_map, dbLocation+"/"+name+".controlled_study");
+		updateIndex(govt_funded_map, dbLocation+"/"+name+".govt_funded");
+		updateIndex(fda_approved_map, dbLocation+"/"+name+".fda_approved");
 	}
 
 	public <K,V> void updateIndex(Map<K, V> map, String name) {
@@ -721,7 +798,7 @@ public class MyDatabase {
 		}
 	}
 
-	public void importCSV(File file) {
+	public void importCSV(File file, String dbLocation) {
 		FileReader fileReader = null;
 		CSVParser csvFileParser = null;
 
@@ -800,7 +877,7 @@ public class MyDatabase {
 				records.add(dbRecord);
 			}
 
-			addBulkRecords(records, name);
+			addBulkRecords(records, name, dbLocation);
 
 		} catch (FileNotFoundException e) {
 			// TODO Auto-generated catch block

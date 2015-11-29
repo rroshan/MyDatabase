@@ -1,32 +1,56 @@
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 
 public class Client {
 	public static void main(String[] args) {
-		File file = new File("/Users/roshan/Documents/UTD/Fall 2015/Database/Programming Project 2/PHARMA_TRIALS_1000B.csv");
-		String name = file.getName();
-		int pos = name.lastIndexOf(".");
-		if (pos > 0)
-		{
-			name = name.substring(0, pos);
-		}
-		
+
 		MyDatabase myDb = new MyDatabase();
 		QueryProcessor qp = new QueryProcessor(myDb);
 
-		//bulk import
-		//myDb.importCSV(file);
+		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in));
+		int message = 1;
 
-		//updating indexes
-		//myDb.updateIndexes(name);
+		String directory = null;
 
-		//view record
-		//read index from file on load of db
-		myDb.populateIndexes(name);
-		
-		String sqlStmt = "SELECT * FROM PHARMA_TRIALS_1000B WHERE id = 1002;";
-		//String sqlStmt = "insert into PHARMA_TRIALS_1000B values (1002, 'roshan1', 'LP-114', 18, 2031, 480, 98.3, true, false, true, false);";
-		
-		//String sqlStmt = "DELETE FROM PHARMA_TRIALS_1000B WHERE id = 1002;";
-		qp.processQuery(sqlStmt);
+		System.out.println("Welcome to Pharma Trials Database");
+		System.out.println("Enter directory where database is located or you want to import to: ");
+		try {
+			directory = bufferedReader.readLine();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		System.out.println(directory);
+		File dir = new File(directory);
+
+		if(!dir.exists()) {
+			dir.mkdir();
+		}
+
+		qp.setDbLocation(dir.getAbsolutePath());
+
+		if(dir.isDirectory()) {
+			String command;
+
+			while(true) {
+				System.out.println();
+				System.out.print("prompt> ");
+				try {
+					command = bufferedReader.readLine();
+					message = qp.processQuery(command);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+				if(message == -1) {
+					System.out.println("Bye");
+					System.exit(0);
+				}
+			}
+		}
 	}
 }
