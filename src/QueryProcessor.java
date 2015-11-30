@@ -187,7 +187,6 @@ public class QueryProcessor {
 					name = name.substring(0, pos);
 				}
 
-				System.out.println(dbLocation);
 				myDb.importCSV(file, dbLocation);
 
 				myDb.updateIndexes(name, dbLocation);

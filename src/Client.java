@@ -15,7 +15,7 @@ public class Client {
 		String directory = null;
 
 		System.out.println("Welcome to Pharma Trials Database");
-		System.out.println("Enter directory where database is located or you want to import to: ");
+		System.out.print("Enter directory where database is located or you want to import to: ");
 		try {
 			directory = bufferedReader.readLine();
 		} catch (IOException e) {
@@ -23,7 +23,6 @@ public class Client {
 			e.printStackTrace();
 		}
 
-		System.out.println(directory);
 		File dir = new File(directory);
 
 		if(!dir.exists()) {
