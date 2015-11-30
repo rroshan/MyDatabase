@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
+
 import org.gibello.zql.ParseException;
 import org.gibello.zql.ZDelete;
 import org.gibello.zql.ZExpression;
@@ -167,6 +168,55 @@ public class QueryProcessor {
 
 		return true;
 	}
+	
+	//for this project
+	public String handleReverseNot(String stmt) {
+		
+		int notStartIndex = stmt.indexOf(" not");
+		
+		char[] charArray = stmt.toCharArray();
+		
+		boolean inWord = false;
+		int endIndex = 0;
+		int startIndex = 0;
+		int j = notStartIndex + 1;
+		notStartIndex++;
+		
+		int notEndIndex = notStartIndex + "not".length();
+		
+		while(charArray[j - 1] == ' ') {
+			j--;
+		}
+		
+		int columnInx = j - 1;
+		
+		
+		for(int i = columnInx; i >= 0; i--) {
+			
+			if(charArray[i] != ' ') {
+				if(!inWord) {
+					endIndex = i;
+					inWord = true;
+				}
+			} else {
+				if(inWord) {
+					inWord = false;
+					startIndex = i + 1;
+					break;
+				}
+			}
+		}
+		
+		String column = stmt.substring(startIndex, endIndex+1);
+		
+		StringBuilder strBulider = new StringBuilder(stmt);
+		strBulider.replace(startIndex, endIndex+1, "not");
+		
+		strBulider.replace(notStartIndex+1, notEndIndex+1, column);
+		
+		return strBulider.toString();
+
+	}
 
 	public int processQuery(String stmt) {
 
@@ -196,6 +246,11 @@ public class QueryProcessor {
 			}
 		}
 		else {
+			
+			if(stmt.contains(" not")) {
+				stmt = handleReverseNot(stmt);
+			}
+			
 			p.initParser(new ByteArrayInputStream(stmt.getBytes()));
 
 			try {
