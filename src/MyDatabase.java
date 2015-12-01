@@ -1,9 +1,11 @@
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.RandomAccessFile;
@@ -13,10 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.Vector;
+
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.gibello.zql.ZSelectItem;
+
 import com.bethecoder.ascii_table.ASCIITable;
 
 
@@ -885,6 +889,55 @@ public class MyDatabase {
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		}
+	}
+	
+	public static void main(String[] args) {
+
+		MyDatabase myDb = new MyDatabase();
+		QueryProcessor qp = new QueryProcessor(myDb);
+
+		BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in));
+		int message = 1;
+
+		String directory = null;
+
+		System.out.println("Welcome to Pharma Trials Database");
+		System.out.print("Enter directory where database is located or you want to import to: ");
+		try {
+			directory = bufferedReader.readLine();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		File dir = new File(directory);
+
+		if(!dir.exists()) {
+			dir.mkdir();
+		}
+
+		qp.setDbLocation(dir.getAbsolutePath());
+
+		if(dir.isDirectory()) {
+			String command;
+
+			while(true) {
+				System.out.println();
+				System.out.print("prompt> ");
+				try {
+					command = bufferedReader.readLine();
+					message = qp.processQuery(command);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+				if(message == -1) {
+					System.out.println("Bye");
+					System.exit(0);
+				}
+			}
 		}
 	}
 }

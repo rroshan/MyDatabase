@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Vector;
-
 import org.gibello.zql.ParseException;
 import org.gibello.zql.ZDelete;
 import org.gibello.zql.ZExpression;
@@ -236,6 +235,12 @@ public class QueryProcessor {
 				{
 					name = name.substring(0, pos);
 				}
+				
+				File dbFile = new File(dbLocation+"/"+name+".db");
+				
+				if(dbFile.exists()) {
+					dbFile.delete();
+				}
 
 				myDb.importCSV(file, dbLocation);
 
@@ -315,13 +320,15 @@ public class QueryProcessor {
 						System.err.println("Values entered not correct");
 					}
 
-					if(validateInsert(ins.getColumns(), values) && myDb.validatePKConstraint(record)) {
-						myDb.addRecord(record, name, dbLocation);
-						myDb.updateIndexes(name, dbLocation);
-						System.out.println("1 row(s) inserted");
-					} else {
-						System.err.println("Duplicate value for primary key coulmn");
-						return 0;
+					if(validateInsert(ins.getColumns(), values)) {
+						if(myDb.validatePKConstraint(record)) {
+							myDb.addRecord(record, name, dbLocation);
+							myDb.updateIndexes(name, dbLocation);
+							System.out.println("1 row(s) inserted");
+						} else {
+							System.err.println("Duplicate value for primary key coulmn");
+							return 0;
+						}
 					}
 				}
 				else if(st instanceof ZQuery)
@@ -362,7 +369,6 @@ public class QueryProcessor {
 						}
 						else
 						{
-							System.err.println("Failed in query processing");
 							return 0;
 						}
 					} else {

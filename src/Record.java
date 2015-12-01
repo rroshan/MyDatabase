@@ -85,9 +85,4 @@ public class Record {
 	public void setFda_approved(boolean fda_approved) {
 		this.fda_approved = fda_approved;
 	}
-	
-	public String toString() {
-		return id+" "+company+" "+drug_id+" "+trials+" "+patients+" "+dosage_mg+" "+reading+" "+double_blind+" "+controlled_study+" "+govt_funded+" "+fda_approved;
-		
-	}
 }
